@@ -1,0 +1,11 @@
+{
+  "name": "chapter12-baseline-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "rm -rf dist && vite",
+    "build": "rm -rf dist && vite build",
+    "start": "vite preview"
+  }
+}
