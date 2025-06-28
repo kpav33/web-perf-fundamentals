@@ -28,6 +28,8 @@
 - **Note:**  
   Tools like **Lighthouse** or **WebPageTest** offer lab data (simulated environments) and are good for testing during development, but RUM gives the true picture of what your users actually experience.
 
+---
+
 # Intro to Initial Load Performance
 
 ## Initial Load Performance Metrics
@@ -109,8 +111,6 @@
 - Use throttling tools to simulate slow connections and CPU constraints.
 - Remember: servers perform tasks (auth, data fetching, logic), so TTFB may vary significantly from localhost to live.
 
----
-
 ## Exploring Network Conditions
 
 - Use **Network throttling** to simulate users on slow/mobile connections.
@@ -124,8 +124,6 @@
   - Reduces latency by serving static assets from geographically distributed servers.
   - Offloads traffic from the origin server.
   - Critical for improving TTFB and LCP.
-
----
 
 ## Repeat Visit Performance (Caching)
 
@@ -153,3 +151,94 @@
   - Ensures browsers always fetch updated files after a deployment.
 
 > Summary: Caching improves repeat load performance, but must be configured thoughtfully to balance freshness and speed.
+
+---
+
+# Client-Side Rendering and Flame Graphs
+
+## Client-Side Rendering (CSR)
+
+- In Client-Side Rendering, JavaScript is responsible for rendering the initial UI in the browser.
+- React, for example, finds the root DOM node (usually an element with `id="root"`), and mounts your component tree onto it using the `createRoot` method.
+- React generates the full DOM tree in memory and injects it into an otherwise empty HTML page using standard DOM APIs.
+- The page remains blank until JavaScript is downloaded and executed. Only then does meaningful content appear—this marks the **First Contentful Paint (FCP)** and **Largest Contentful Paint (LCP)**.
+
+### Downsides of CSR
+
+- **Delayed initial render:** FCP and LCP are delayed until JavaScript executes.
+- **Poor experience without JS:** Disabling JavaScript results in a blank page.
+- **Performance cost:** Even with cached JS files, execution time still delays rendering.
+- **Layout and paint are deferred:** Unlike server-rendered apps, the browser doesn't start painting meaningful content right after HTML parsing.
+
+### Why Use CSR?
+
+- Simpler deployment: just serve static files (HTML, JS, CSS).
+- Cost-effective and scalable for many use cases.
+- While CSR hurts LCP and initial load, it can offer **excellent runtime performance**—especially important for interactive apps.
+
+## Flame Graphs / Flame Charts
+
+- A **Flame Graph** (also called a Flame Chart in Chrome DevTools) visualizes the **JavaScript call stack** over time.
+- It shows which functions were executed, how long they took, and which functions called them.
+
+### Key Concepts
+
+- **Call Stack:** A record of functions invoked and their execution order.
+- **Total Time:** How long a function and all its child functions took to execute.
+- **Self Time:** How long the function itself took, excluding child function calls.
+
+Knowing both values helps identify slow functions and where optimizations will be effective.
+
+## Analyzing Flame Graphs in DevTools
+
+- Use the **Performance tab** in Chrome DevTools with **"Record and Reload"**.
+- The **Main section** displays the flame graph:
+  - Initial HTML parsing
+  - JavaScript execution
+  - Subsequent FCP and LCP markers
+
+### Key Observations
+
+- Look for a **purple "Layout" block** after JavaScript execution.  
+  This indicates layout calculations—how elements are positioned and sized. In large apps, this step can be costly.
+
+- Each bar in the graph represents a function call.
+  - Click to inspect:
+    - Function name
+    - Total time
+    - Self time
+    - Call hierarchy
+
+### Troubleshooting with Flame Graphs
+
+- Identify which functions are taking the most time.
+- Look for unexpectedly long execution chains.
+- Watch out for third-party plugins or browser extensions—they may appear in the call stack and inflate execution time.
+  - **Tip:** Use **Incognito Mode** to eliminate browser extensions from the test environment.
+
+## CSR vs Non-CSR in the Performance Panel
+
+- **Non-CSR websites:**
+
+  - After HTML is parsed, layout and painting happen immediately.
+  - JavaScript runs _after_ meaningful content is already displayed.
+
+- **CSR websites:**
+  - Layout and paint are deferred until after JavaScript execution.
+  - There’s no visible content during HTML parsing.
+  - LCP occurs only after the JS has finished building the DOM and triggering paint.
+
+> This delay is why CSR often has **worse LCP metrics**, even when JS is cached.
+
+## Summary
+
+- **Client-Side Rendering** provides a low-cost, scalable way to build rich apps.
+- But it shifts the rendering burden to the browser, increasing initial load time.
+- Use **Flame Graphs** in the Performance panel to:
+  - Inspect execution flow
+  - Pinpoint performance bottlenecks
+  - Distinguish between app-related slowdowns and third-party issues
+
+CSR isn’t always the right choice—especially for content-heavy sites—but it can be the best tradeoff for highly interactive apps where runtime experience matters more than initial load.
+
+---
