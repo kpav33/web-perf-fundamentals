@@ -242,3 +242,88 @@ Knowing both values helps identify slow functions and where optimizations will b
 CSR isn’t always the right choice—especially for content-heavy sites—but it can be the best tradeoff for highly interactive apps where runtime experience matters more than initial load.
 
 ---
+
+# SPAs and Introducing INP
+
+## Single-Page Applications (SPAs)
+
+- A **Single-Page Application** is a client-side rendered app where routing and navigation are handled entirely in the browser without full-page reloads.
+- Instead of traditional `<a>` tags that trigger full page loads, SPAs use `window.history.pushState()` to update the URL. This does not reload the page but instead triggers a custom event to handle the navigation logic.
+- An event listener watches for URL changes and renders the appropriate content based on the new route.
+- Modern frameworks like **Next.js**, **Remix**, or **TanStack Router** abstract this mechanism behind components like `<Link>`, simplifying client-side routing.
+- When a route changes in a SPA:
+  - No network request is made to fetch a new HTML page.
+  - Instead, JavaScript tears down the current view and renders the new one using code already in memory.
+  - You won’t see any activity in the **Network panel**, but there will be a spike in JavaScript activity in the **Performance Timeline**.
+  - Since the browser doesn’t recognize this as a page load, **FCP/LCP metrics are not re-triggered**.
+
+### Pros and Cons of SPAs
+
+**Pros:**
+
+- Fast, smooth transitions between pages.
+- No page reloads or flickers.
+- Efficient reuse of assets (no need to refetch CSS, JS, etc. on each page).
+
+**Cons:**
+
+- No content without JavaScript (bad for SEO and accessibility).
+- Initial load can be heavy.
+- FCP/LCP only measured on the first load—makes monitoring harder.
+
+## Introducing Interaction to Next Paint (INP)
+
+- Since SPAs don't trigger FCP or LCP on internal navigation, a different performance metric is needed: **Interaction to Next Paint (INP)**.
+- INP measures how responsive your app feels during real user interactions—how long it takes from the moment a user interacts until the UI updates visually.
+
+### What INP Measures
+
+- INP is one of the three **Core Web Vitals**, alongside LCP and CLS.
+- Where **LCP** measures the speed of the _first impression_, **INP** evaluates the _ongoing experience_—how smooth interactions are after the page loads.
+- It reflects **the longest interaction delay** observed during a session.
+
+### Interpreting INP
+
+| INP Value  | Performance       |
+| ---------- | ----------------- |
+| ≤ 200 ms   | Good              |
+| 200–500 ms | Needs Improvement |
+| > 500 ms   | Poor              |
+
+- INP can be measured using **Lighthouse**:
+
+  - Use the **Timespan mode** to simulate user interaction within a SPA.
+  - Navigate between several internal pages.
+  - The report will highlight the highest INP recorded.
+
+- INP is also visible in the **Performance Panel**:
+  - While recording, navigate your SPA.
+  - The **Interactions** section will log input events, their origins, and durations.
+  - The **Main thread** section will show what the browser did in response—e.g., recalculating styles, layout, paint, etc.
+
+### Debugging INP
+
+- The **Interactions block** highlights:
+
+  - What user interaction occurred (e.g., click, tap).
+  - How long it took for the next paint to occur.
+  - What caused the delay (e.g., heavy JS, layout thrashing).
+
+- By combining **Main** and **Interactions** in the Performance Panel:
+  - You can trace exactly what happened after a route change.
+  - See what tasks were queued (style recalculation, painting, script execution).
+  - Identify bottlenecks affecting interaction responsiveness.
+
+## Summary
+
+- SPAs handle routing on the client side using the History API and dynamic rendering.
+- They feel fast because of reduced network overhead, but suffer from:
+
+  - No rendering without JavaScript.
+  - Poor initial load performance.
+  - Limited visibility into performance using traditional metrics.
+
+- **INP** is a key metric for SPAs, capturing how fast the UI reacts to user input post-initial load.
+- Use **Lighthouse (Timespan)** and the **Performance Panel** to measure and debug high INP values.
+
+> Pro tip: In a SPA, your bottlenecks will often show up during route transitions—watch the JavaScript execution time, layout recalculations, and interaction latency.
