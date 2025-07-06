@@ -327,3 +327,101 @@ CSR isn’t always the right choice—especially for content-heavy sites—but i
 - Use **Lighthouse (Timespan)** and the **Performance Panel** to measure and debug high INP values.
 
 > Pro tip: In a SPA, your bottlenecks will often show up during route transitions—watch the JavaScript execution time, layout recalculations, and interaction latency.
+
+---
+
+# Server-Side Rendering (SSR) and Pre-rendering
+
+## Why No-JavaScript Environments Matter
+
+- Many clients — **search engine crawlers**, **social media previews**, **messaging apps** — do **not execute JavaScript**.
+- These clients:
+  - Fetch the HTML directly from a URL.
+  - Parse static content: `<title>`, `<meta>`, headings, etc.
+  - Skip JS execution due to resource/time costs.
+- Google and some others use a **two-step crawl**:
+  1. Parse static HTML for metadata.
+  2. Queue the page for full JS rendering via a headless browser (can take hours/days).
+- For fast discoverability and previewing, your site must work **without JavaScript** — SPAs break in these contexts.
+
+## Server Pre-rendering
+
+- A workaround is **server pre-rendering** — sending pre-built HTML from the server.
+- Mechanism:
+  - Server reads the built `index.html`, renders it as a string.
+  - Returns modified HTML (e.g., dynamic `<title>`, `<meta>`) based on the requested route.
+- Tradeoffs:
+  - **Adds complexity**: Requires a server (vs. static file hosting).
+  - **Higher cost**: Serverless functions or managed SSR (like Vercel/Netlify) can get expensive under high traffic.
+  - **Performance hit**: Requests now depend on a live server response; not just CDN delivery.
+    - Serverless functions at the edge help mitigate this, but add complexity.
+
+## SSR with React
+
+- React provides `renderToString()` — renders your app to a plain HTML string.
+- Makes the app usable for:
+  - **Crawlers**
+  - **Users with JS disabled**
+  - **Faster first paint in some cases**
+- SSR **improves discoverability and accessibility**.
+
+## Performance Caveats
+
+- **SSR can worsen LCP**:
+  - For users with **slow networks but fast devices**, downloading large HTML blocks takes longer.
+  - HTML becomes the bottleneck before JS can hydrate the page.
+
+## Hydration
+
+- React renders client-side UI on top of SSR HTML using **hydration**:
+  - Instead of replacing the DOM, React **reuses existing HTML nodes**.
+  - Adds event listeners and internal state — no re-rendering from scratch.
+- You implement hydration with `hydrateRoot()` instead of `createRoot()`.
+
+### Performance Timeline
+
+- In DevTools:
+  - After CSS loads, SSR content triggers a large **Layout**.
+  - Then React loads, **clears the root**, and injects its output.
+  - With hydration, there's no root clearing — just enhanced DOM.
+
+## SSR Implementation Notes
+
+- **Don't write your own SSR logic** — use a framework (e.g., **Next.js**, **Remix**).
+- **Frontend changes required**:
+
+  - No `window`, `document`, or browser-specific APIs in SSR context.
+  - These will be `undefined` on the server and crash the app.
+  - Add guards like `if (typeof window !== "undefined")`.
+
+- SSR-safe hooks:
+
+  - React does **not run** `useEffect` or `useLayoutEffect` on the server.
+  - Safe to use browser-only logic inside these hooks.
+
+- **Avoid conditional SSR rendering**:
+
+  - React expects server HTML to match client output exactly.
+  - Mismatch will cause React to **fallback to CSR** and replace the entire DOM.
+  - This breaks hydration and may cause layout flickers or bugs.
+
+- Instead, use a **mounted state flag** to delay browser-only rendering until after hydration.
+
+- **Third-party libraries**:
+  - Not all libraries support SSR.
+  - Some may rely on browser APIs and fail during server build.
+  - Use dynamic imports (`import('...')`) to defer loading until after JS loads.
+
+## Static Site Generation (SSG)
+
+- If page content is **fully static**, you can pre-render it at **build time** using `renderToString`.
+- This generates HTML files ready to be served from a CDN.
+- Most frameworks (e.g., Next.js, Astro, Hugo) support SSG for performance + SEO.
+
+## Summary
+
+- **SSR makes your site visible and usable without JavaScript**.
+- It improves SEO, link previews, and accessibility.
+- Comes with **cost, complexity, and performance tradeoffs**.
+- Use established frameworks — don’t build SSR by hand.
+- Always test hydration and SSR compatibility, especially with third-party tools.
