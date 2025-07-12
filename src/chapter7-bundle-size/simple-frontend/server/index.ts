@@ -8,7 +8,7 @@ import { compress } from "hono/compress";
 import { preRenderApp } from "./pre-render";
 
 const app = new Hono();
-// app.use(compress());
+app.use(compress());
 const dist = path.join(process.cwd(), "./dist/client");
 
 app.get("/assets/*", async (c) => {

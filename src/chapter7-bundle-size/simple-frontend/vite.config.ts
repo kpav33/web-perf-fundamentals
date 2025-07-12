@@ -44,22 +44,22 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    // visualizer({
-    //   filename: "stats.html",
-    //   emitFile: true,
-    //   template: "treemap",
-    // }),
+    visualizer({
+      filename: "stats.html",
+      emitFile: true,
+      template: "treemap",
+    }),
   ],
   build: {
     rollupOptions: {
       output: {
-        // manualChunks: (id) => {
-        //   if (id.includes("node_modules")) {
-        //     return "vendor";
-        //   }
-        //
-        //   return null;
-        // },
+        manualChunks: (id) => {
+          if (id.includes("node_modules")) {
+            return "vendor";
+          }
+
+          return null;
+        },
       },
     },
   },

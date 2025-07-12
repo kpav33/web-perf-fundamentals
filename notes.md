@@ -425,3 +425,120 @@ CSR isn’t always the right choice—especially for content-heavy sites—but i
 - Comes with **cost, complexity, and performance tradeoffs**.
 - Use established frameworks — don’t build SSR by hand.
 - Always test hydration and SSR compatibility, especially with third-party tools.
+
+---
+
+# Bundle Size and What to Do About It
+
+## Bundle Size and the Network
+
+- Larger bundles take longer to download, directly impacting page load speed.
+- Production builds are usually compressed (e.g., **gzip**, **brotli**) to reduce transfer size.
+- Most CDNs and hosts enable compression by default—verify it's active.
+- When evaluating bundle size impact, always consider compressed size, not raw output.
+
+## Bundle Size and JavaScript Evaluation Time
+
+- After downloading, the browser evaluates all JavaScript before executing it.
+- Larger bundles = longer **"Evaluate Script"** tasks in the main thread.
+- This evaluation cost is **paid on every visit**, even if the file is cached.
+- Unused JavaScript inflates evaluation time unnecessarily.
+
+## Bundle Size and SSR
+
+- SSR flow: HTML loads → CSS/JS download → LCP → hydration.
+- Until hydration finishes, the page looks interactive but isn’t—clicks, forms, etc. won’t work.
+- On slow networks/CPUs, large bundles delay hydration, hurting usability.
+- **Time to Interactive (TTI)** is the key metric to measure this delay.
+
+## Reducing Bundle Size with Code Splitting
+
+- **Code splitting** breaks large bundles into smaller, independently loadable chunks.
+- Browsers download chunks in parallel → faster initial load.
+- Requires modular, dependency-isolated structure.
+
+### Vendor vs. App Code
+
+- Separate **vendor** code (dependencies) from your **app** code:
+  - Enables long-term caching for rarely changing vendor code.
+  - Prevents cache busting for the entire app on small changes.
+  - Improves chunk reuse and reduces overall payload.
+
+### Benefits of Splitting
+
+- Better parallelism during download.
+- Improved cache efficiency.
+- Shorter compile/build times—only changed chunks are rebuilt.
+
+### Chunking Gotchas
+
+- Manual chunks are treated as **critical** and preloaded via `<link rel="modulepreload">`.
+- Under **HTTP/1**, browser limits concurrent downloads (e.g., 6 per domain in Chrome).
+  - Excessive chunking here can hurt performance.
+- Most CDNs use **HTTP/2 or HTTP/3** (which multiplex requests), but **local dev servers** (e.g., Next.js, Express) often use HTTP/1.
+  - This means chunking may reduce performance **locally**, but help **in production**.
+- Over-chunking reduces compression ratio—smaller files = worse gzip/brotli efficiency.
+- Use **dynamic imports** (`import()` syntax) to load code only when needed—but introduces complexity.
+
+## Analyzing Bundle Size
+
+- Use tools like **Rollup Plugin Visualizer** to inspect the output:
+  - Generates a visual HTML report of your dependency tree.
+  - Helps identify large packages bloating the bundle.
+
+### Debugging Steps
+
+1. Identify large packages.
+2. Understand what the package does.
+3. Check where and how it's used.
+4. Confirm if it's the cause of the bloat.
+5. Refactor or remove if possible.
+
+## Tree Shaking and Dead Code Elimination
+
+- Bundlers remove unused code via **tree shaking**:
+  - Build a dependency tree and prune unused "branches."
+- Works best with **ES Modules (ESM)**:
+  - Syntax: `import`, `export`.
+- Some patterns (e.g., dynamic access) prevent tree shaking from working.
+
+## ES Modules and Non-Treeshakable Libraries
+
+- Module formats: **ESM**, **CJS**, **AMD**, **UMD**.
+  - Only **ESM** is reliably tree-shakeable.
+- Use `npx is-esm [package]` to check if a dependency supports ESM.
+- Some libraries expose smaller entry points:
+  - ✅ `import trim from "lodash/trim"`
+  - ❌ `import _ from "lodash"`
+
+## Common Sense and Repeated Libraries
+
+- Avoid importing multiple libraries for the same task (e.g., date manipulation).
+- Pick one:
+  - Supports tree shaking.
+  - Well-maintained.
+  - Suitable API.
+- Refactor to consolidate and reduce duplication.
+
+## Transitive Dependencies
+
+- If you didn’t install a package directly but it’s in your bundle, it came from a **transitive dependency**, which means it is used by another library that we use somewhere in our code.
+- Use `npx npm-why [package-name]` to find where it's used.
+  - Example: `npx npm-why @emotion/styled`
+
+## Summary
+
+- **Large bundles hurt twice**:
+  - **Network cost** on first visit (download time).
+  - **Evaluation cost** on every visit (long “Evaluate Script” tasks).
+- In **SSR** flows, oversized bundles postpone hydration, inflating **Time To Interactive (TTI)**.
+- **Compression (gzip/brotli)** is mandatory but not a silver bullet—focus on shipped bytes, not just raw size.
+- **Code splitting** + **vendor/app separation** improves caching and parallel downloads, but:
+  - Excessive chunks cut compression efficiency and can stall under **HTTP/1** limits.
+  - Use **dynamic imports** for truly non‑critical code paths.
+- **Tree shaking** removes dead code; it’s most effective with **ES Modules**. Prefer ESM‑friendly libraries or fine‑grained imports (e.g., `lodash/trim`).
+- Continuously audit bundles with visualizers, locate heavy or duplicate dependencies, and clean up transitive bloat.
+
+> **Pro tip:** The biggest performance gains often come from **deleting** unused libraries, not from tweaking your chunk strategy. Start with elimination, then optimize what’s left.
+
+---
