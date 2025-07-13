@@ -542,3 +542,147 @@ CSR isn’t always the right choice—especially for content-heavy sites—but i
 > **Pro tip:** The biggest performance gains often come from **deleting** unused libraries, not from tweaking your chunk strategy. Start with elimination, then optimize what’s left.
 
 ---
+
+# Intro to Lazy Loading and Suspense
+
+## Lazy Loading and Code Splitting
+
+- Lazy loading is useful for features that are **not visible on initial load** but are **heavy in performance**. The idea is to **defer loading** them until needed.
+- This involves extracting the code into a **separate chunk**, away from the vendor code, and loading it **after critical resources** have finished loading.
+- In React, implementing lazy loading requires four key steps:
+  1. **Mark part of the code as unnecessary** on initial load.
+  2. **Extract** that code into its own chunk.
+  3. **Control** when the download starts.
+  4. **Control** what happens during the download process.
+
+> The exact implementation depends on the bundler or framework. Some setups (e.g., Vite) support lazy loading by default, others may need plugin/config changes.
+
+## Marking Code as Lazy
+
+Use React's `lazy()` function with a **dynamic import** to mark components as non-critical:
+
+**Before:**
+
+```jsx
+import { MessageEditor } from "@fe/patterns/messageeditor";
+
+{
+  clickedMessage ? (
+    <MessageEditor onClose={() => setClickedMessage(null)} />
+  ) : null;
+}
+```
+
+**After:**
+
+```jsx
+import { lazy } from "react";
+
+const MessageEditorLazy = lazy(async () => {
+  return {
+    default: (await import("@fe/patterns/messageeditor")).MessageEditor,
+  };
+});
+
+{
+  clickedMessage ? (
+    <MessageEditorLazy onClose={() => setClickedMessage(null)} />
+  ) : null;
+}
+```
+
+- The component is now lazy-loaded and **only downloaded when mounted**.
+- Lazy returns a regular component, but the import only triggers when the component is rendered.
+
+## Lazy Chunk Behavior
+
+- In most bundlers (e.g., **Vite**), lazy-loaded components are automatically extracted into their **own chunk**.
+- These chunks are **not injected** into `index.html` and are **not preloaded** during the initial render.
+- When the lazy component mounts, a script tag is dynamically appended to `document.head`, triggering download.
+
+> You can verify this by inspecting the `dist/index.html` and checking the **Network tab** for when the chunk loads.
+
+## Control the Start of Download
+
+- Lazy chunks download only when their components are **mounted**.
+- If a lazy component is conditionally rendered (`null` or component), download is deferred until it becomes visible.
+- But if it mounts immediately, the lazy chunk is still downloaded **after** critical assets—delaying the render.
+- In this case, the **browser waits silently**, hurting metrics like **FCP** and **LCP**.
+
+> This is why you must manage what happens **while the lazy download is in progress**. Enter `Suspense`.
+
+## Suspense: What It Is
+
+React’s `Suspense` component wraps lazy-loaded components and handles loading states. It:
+
+- Detects lazy-loaded children that are still loading.
+- **Skips rendering** those children and shows a fallback UI instead.
+- Proceeds to render the rest of the app.
+- Once the lazy chunk is ready, React renders it in place.
+
+**Example:**
+
+```jsx
+const Button = () => <button>Button</button>;
+
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+const LazyButton = lazy(async () => {
+  await sleep(3000);
+  return { default: Button };
+});
+
+const Parent = () => (
+  <>
+    <h1>Welcome!</h1>
+    <Suspense fallback={<div>Loading...</div>}>
+      <LazyButton />
+    </Suspense>
+  </>
+);
+```
+
+> Without `Suspense`, React blocks rendering until the chunk is ready. With it, you get early render + loading fallback.
+
+## Applying Suspense in Practice
+
+Wrap your lazy component in `Suspense` with a fallback:
+
+```jsx
+<Suspense
+  fallback={
+    <div className="w-full h-full fixed top-0 left-0 opacity-50 bg-blinkNeutral300 z-50" />
+  }
+>
+  <MessageEditorLazy onClose={() => setClickedMessage(null)} />
+</Suspense>
+```
+
+- This improves **FCP/LCP** because React no longer waits for lazy chunks to finish.
+- Fallback UI is shown while the lazy component loads.
+
+## Suspense Fallback Strategy
+
+- If a lazy-loaded component is conditionally rendered **after interaction**, a fallback is mandatory.
+- If it's immediately rendered, fallback is optional—but still good UX.
+- Without a fallback, the user sees **nothing** during lazy chunk load.
+
+## Summary
+
+- **Lazy loading** is ideal for heavy components not needed on initial render.
+- To implement lazy loading in React:
+
+  - Replace direct imports with `React.lazy` + dynamic imports.
+  - Ensure the bundler (e.g., **Vite**) extracts the lazy code into a separate chunk.
+  - Use **conditional rendering** to defer mounting—and downloading—of the component.
+  - Use **React.Suspense** to provide a fallback UI while loading occurs.
+
+- **React.lazy** loads a component only when it's rendered for the first time.
+- Lazy-loaded chunks are **not preloaded**; they're injected dynamically via script tags once needed.
+- Without `Suspense`, React waits to finish downloading lazy chunks before completing initial render—hurting **LCP**.
+- With `Suspense`, React **defers** the lazy component and proceeds to render critical parts, improving user-perceived performance.
+- Always provide a **fallback** inside `Suspense`, especially for conditionally-rendered components—users otherwise see nothing while chunks load.
+
+> **Pro tip:** Lazy loading without `Suspense` often makes things worse. You must **control the UX** during the loading phase to benefit from deferred code execution.
+
+--

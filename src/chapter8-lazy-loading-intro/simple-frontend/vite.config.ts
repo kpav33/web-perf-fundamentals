@@ -54,10 +54,21 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: (id) => {
+          // if (id.includes("node_modules")) {
+          //   return "vendor";
+          // }
+
+          // return null;
+
+          if (
+            id.includes("node_modules/@tiptap") ||
+            id.includes("node_modules/prosemirror")
+          ) {
+            return "editor-vendor";
+          }
           if (id.includes("node_modules")) {
             return "vendor";
           }
-
           return null;
         },
       },

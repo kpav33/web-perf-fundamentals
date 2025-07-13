@@ -5,7 +5,13 @@ import { messages } from "@fe/data/inbox-messages";
 import { Icons } from "@fe/icons/index-fixed";
 import { ConfirmArchiveDialog } from "@fe/patterns/confirm-archive-dialog-fixed";
 import { ConfirmDeleteDialog } from "@fe/patterns/confirm-delete-dialog-fixed";
-import { MessageEditor } from "@fe/patterns/message-editor-fixed";
+// import { MessageEditor } from "@fe/patterns/message-editor-fixed";
+// lazy import for a named component
+const MessageEditorLazy = lazy(async () => {
+  return {
+    default: (await import("@fe/patterns/message-editor")).MessageEditor,
+  };
+});
 import { merge } from "@fe/utils/merge-classnames";
 import * as Toast from "@radix-ui/react-toast";
 import { format } from "date-fns";
@@ -18,18 +24,28 @@ export const MessageList = () => {
   return (
     <div className="flex flex-col w-full">
       {clickedMessage ? (
-        <MessageEditor
-          onClose={() => {
-            setClickedMessage(null);
-          }}
-        />
+        // <MessageEditor
+        <Suspense
+          fallback={
+            <div
+              className="w-full h-full fixed
+        top-0 left-0 opacity-50 bg-blinkNeutral300 z-50"
+            ></div>
+          }
+        >
+          <MessageEditorLazy
+            onClose={() => {
+              setClickedMessage(null);
+            }}
+          />
+        </Suspense>
       ) : null}
       {messages.map((message) => (
         <div
           key={message.id}
           className={merge(
             `px-6 py-4 border-b border-blinkGray100 dark:border-0 last:border-b-0 hover:bg-blinkGreen50 relative`,
-            message.read ? "bg-blinkGray50/70" : "bg-transparent",
+            message.read ? "bg-blinkGray50/70" : "bg-transparent"
           )}
           onMouseEnter={() => setHoveredMessage(message.id)}
           onMouseLeave={() => setHoveredMessage(null)}
