@@ -67,6 +67,19 @@ export default defineConfig({
             return "vendor";
           }
 
+          // if (id.includes("dashboard")) {
+          //   return "dashboard";
+          // }
+          // if (id.includes("inbox")) {
+          //   return "inbox";
+          // }
+          // if (id.includes("login")) {
+          //   return "login";
+          // }
+          // if (id.includes("settings")) {
+          //   return "settings";
+          // }
+
           return null;
         },
       },

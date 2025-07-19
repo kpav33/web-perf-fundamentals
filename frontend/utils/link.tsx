@@ -1,6 +1,13 @@
-import { AnchorHTMLAttributes } from "react";
+import { AnchorHTMLAttributes, useEffect } from "react";
 
 import { useNavigate } from "@fe/utils/use-client-router";
+
+// const preloadingMap = {
+//   '/': () => import('./pages/dashboard'),
+//   '/settings': () => import('./pages/settings'),
+//   '/inbox': () => import('./pages/inbox'),
+//   '/login': () => import('./pages/login'),
+//   };
 
 export const Link = ({
   href,
@@ -8,6 +15,13 @@ export const Link = ({
   ...props
 }: AnchorHTMLAttributes<HTMLAnchorElement>) => {
   const navigate = useNavigate();
+
+  //   useEffect(() => {
+  //     if (href && preloadingMap[href]) {
+  //     const preload = preloadingMap[href];
+  //     preload();
+  //   }
+  // }, [href]);
 
   return href ? (
     <a

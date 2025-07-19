@@ -685,4 +685,93 @@ Wrap your lazy component in `Suspense` with a fallback:
 
 > **Pro tip:** Lazy loading without `Suspense` often makes things worse. You must **control the UX** during the loading phase to benefit from deferred code execution.
 
---
+---
+
+# Advanced Lazy Loading
+
+## Manual Code Splitting Per Route
+
+- By default, **all code is bundled** and linked in `index.html`, even if not immediately needed.
+- In a CSR (Client-Side Rendered) app with multiple pages, we can split code **per page** using **manual chunks** in `vite.config.ts`.
+- However, splitting into more chunks can hurt performance due to:
+  - Increased number of parallel downloads.
+  - **Connection limits in HTTP/1** (e.g., 6 per domain in Chrome).
+  - This issue doesn’t exist in **HTTP/2 or HTTP/3**, which are used in most production environments.
+
+> Key Point: Even if performance doesn't improve much due to vendor chunk bottlenecks, **chunking is still useful for managing cache behavior**.
+
+- **First-time visitors** pay the full download cost. Later visits are faster due to caching.
+- If a page rarely changes, code splitting doesn’t help much—cache will cover it.
+- If updates are frequent, splitting can be valuable to **avoid redownloading everything** on each deployment.
+
+## Lazy Loading Per Route
+
+- An alternative to manual chunking: **lazy load components per route**.
+- On initial render:
+  - Only **critical chunks** (e.g., index + vendor) are downloaded.
+  - React mounts the base structure.
+  - Lazy-loaded route component gets mounted → triggers chunk download.
+  - Once chunks are ready, React renders the lazy component.
+
+> Downside: **LCP can increase**, because the page is rendered in two steps—first without lazy-loaded content, then with it.
+
+- Lazy loading per route introduces more control over the **critical rendering path**, even if it introduces some overhead.
+
+## Loading Critical Elements First
+
+- Use the **Performance panel** in DevTools to inspect LCP:
+  - Click the LCP label to locate the associated DOM node.
+  - Once identified, **move this element out of lazy-loaded components**.
+  - This ensures it is part of the initial critical render and not delayed.
+
+> This technique gives you precision over which elements are prioritized during page load.
+
+## Preloading Lazy Chunks Manually
+
+- Problem: Lazy-loaded routes may result in a **blank screen** during navigation.
+- Solution 1: Use a proper **fallback UI** in `<Suspense>`.
+- Solution 2: **Preload** chunks **after** critical resources finish loading.
+
+### Manual Preload Example (Vite)
+
+```js
+import("./settings"); // triggers preload without rendering
+```
+
+- This triggers the download of the chunk but doesn't mount it.
+- Ensures it’s ready by the time the user navigates there.
+
+> In large projects, manual preloading can become repetitive and hard to maintain.
+
+## Preloading With a Link Component
+
+- Many frameworks provide a custom `<Link>` component that automatically handles **preloading** of destination route chunks.
+- These components:
+  - Trigger chunk downloads **on hover** or when in viewport.
+  - Avoid blocking LCP but **reduce blank states during navigation**.
+
+> Use your framework’s official `<Link>` or navigation components—they often come with smart preloading built-in.
+
+## Lazy Loading and Frameworks
+
+- Framework choice matters less than understanding the **fundamentals** of lazy loading and code splitting.
+- Once you grasp chunking, hydration, preload behavior, and route-based rendering, switching between frameworks is straightforward.
+
+## Lazy Loading and SSR
+
+- In SSR, HTML renders before JavaScript loads.
+- Lazy-loaded parts will not be interactive until their JS is downloaded and hydrated.
+- Page appears fast, but initially non-functional—**just static HTML** with links and native behaviors working.
+- Lazy loading in SSR still helps by prioritizing **critical UI** and deferring non-essential features.
+
+## Summary
+
+- **Manual route-level chunking** is possible in Vite but comes with trade-offs—use with awareness of HTTP/1 limits and caching implications.
+- **Lazy loading per route** gives better control over the critical render path, but can hurt **LCP** unless fallback and preload strategies are applied.
+- Use the **Performance panel** to identify and prioritize LCP-critical elements.
+- Preload lazy chunks:
+  - **Manually** with `import()` for key routes.
+  - **Automatically** via your framework's `<Link>` component.
+- With SSR, lazy loading speeds up perceived render at the cost of initial interactivity—but the tradeoff can still be worth it.
+
+> **Pro tip:** Use lazy loading to define your critical rendering path. Pair it with preloading and Suspense to control when and how the rest of your app shows up.
