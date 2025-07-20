@@ -775,3 +775,210 @@ import("./settings"); // triggers preload without rendering
 - With SSR, lazy loading speeds up perceived render at the cost of initial interactivity—but the tradeoff can still be worth it.
 
 > **Pro tip:** Use lazy loading to define your critical rendering path. Pair it with preloading and Suspense to control when and how the rest of your app shows up.
+
+---
+
+# Data Fetching and React Server Components
+
+## Data Fetching on the Client
+
+- **Default pattern in SPAs**: Fetch data after components mount.
+
+  - First, critical assets load.
+  - Then, lazy-loaded components download.
+  - Then, dynamic data is fetched (e.g., via `useEffect`).
+  - Finally, data-dependent UI renders.
+
+- **Downside**: LCP suffers due to delayed fetch initiation.
+- **Optimization**: Trigger fetch outside of components to **start early**.
+
+```js
+const preloadPromise = fetch("http://localhost:5432/api/sidebar");
+```
+
+- This starts the fetch **before** component is mounted but still waits for lazy bundles to be parsed.
+- A better way: trigger fetch early and cache the promise.
+
+```js
+let sidebarCache = undefined;
+let tableCache = undefined;
+
+export const prefetch = () => {
+  if (!sidebarCache) {
+    sidebarCache = fetch("http://localhost:5432/api/sidebar");
+  }
+  if (!tableCache) {
+    tableCache = fetch("http://localhost:5432/api/statistics");
+  }
+  return {
+    sidebar: sidebarCache,
+    table: tableCache,
+  };
+};
+```
+
+### Prefetching in HTML
+
+- You can inject the fetch directly into `index.html` to kick off loading before React loads:
+
+```html
+<script>
+  window.__PREFETCH_PROMISES = {
+    sidebar: fetch("http://localhost:5432/api/sidebar"),
+    table: fetch("http://localhost:5432/api/statistics"),
+  };
+</script>
+```
+
+- Use in React like this:
+
+```js
+let sidebarCache = window.__PREFETCH_PROMISES?.sidebar;
+let tableCache = window.__PREFETCH_PROMISES?.table;
+```
+
+- **Tradeoff**: Slower initial render (hurts LCP), but faster data availability post-mount.
+- **Caveat**: You may be fetching unused data on the homepage.
+
+### Libraries for Client-Side Fetching
+
+- Use **TanStack Query** or **SWR** for caching, retries, background sync, and stale data handling.
+- They abstract boilerplate, but still rely on JS fundamentals—bound by the same browser/network constraints.
+
+## Data Fetching and SSR
+
+- On the server, data is fetched before HTML is sent.
+- Data is passed to the React app (usually via props).
+- Hydration on the client reuses the SSR-rendered DOM.
+  - React attaches event listeners to preexisting DOM.
+  - If hydration fails or props/data are missing, React discards DOM and re-renders from scratch (bad).
+
+> 🔥 **Critical**: Data must be passed to both `renderToString` (server) and `hydrateRoot` (client) to avoid mismatches.
+
+- Inject server data into the browser via `<script>`:
+
+```html
+<script>
+  window.__SSR_DATA__ = {
+    sidebar: "...",
+    statistics: "...",
+  };
+</script>
+```
+
+- This lets React pick up pre-fetched data on client without redundant fetches.
+
+> ✅ Benefit: No loading states or spinners needed—data is already there.
+> ❌ Drawback: Slower total page load if server fetches are slow.
+
+### Use Frameworks with SSR Built-In
+
+- **Don't roll your own SSR**—use established solutions:
+
+  - **Next.js**
+  - **TanStack Router**
+  - **React Router**
+
+- Example: `window.__NEXT_DATA__` in Next.js holds SSR data for hydration.
+
+## Streaming and React Server Components
+
+- **Problem with SSR**: Doesn't reduce bundle size—everything is still sent to the browser.
+- **Server Components** fix this by:
+  - Running **only on the server**.
+  - Sending **HTML + metadata**, not JavaScript.
+  - Reducing client bundle size.
+  - Supporting **filesystem/database access** in components.
+
+### Client vs Server Components
+
+- **Server component** = default. Never sent to browser.
+- **Client component** = use `"use client"` directive at top.
+
+```js
+// Client component
+"use client";
+
+export default function Button() {
+  return <button>Click me</button>;
+}
+```
+
+- A **client component makes all its children client components**, even if they don’t have `"use client"`.
+
+### `use server` Directive
+
+- Used to define **server functions callable from the client**.
+- Basically just a **custom RPC mechanism**—an alternative to REST APIs.
+
+### What is a React Element?
+
+- It’s just an object like this:
+
+```js
+{
+  type: Button,
+  props: {
+    children: "I'm a button"
+  }
+}
+```
+
+- React walks the component tree and builds these objects.
+- Then it builds real DOM nodes from the objects.
+
+### Server Components + Tree Pre-Rendering
+
+- RSC lets us **precompute the React tree** and send that to client.
+- Client renders from that object, not from JS components.
+
+```html
+<script>
+  window.__SERVER_COMPONENTS = JSON.stringify(...);
+</script>
+```
+
+> 💡 This skips React's initial render pass on the client = **faster render**.
+
+### Server Component Benefits
+
+- Smaller client bundles.
+- Server-only logic (DB, FS access).
+- Asynchronous components can fetch their own data directly.
+- No prop drilling needed.
+- Best suited for dynamic data-heavy apps.
+
+### Next.js and Streaming
+
+- Next.js aggressively prebuilds and caches everything.
+- To **opt out** (e.g., for CMS-driven content), use:
+
+```js
+export const dynamic = "force-dynamic";
+```
+
+- This disables pre-rendering and enables **live SSR**.
+
+### Streaming
+
+- Node streams HTML **in chunks** as data becomes available.
+- Use `<Suspense>` to define chunk boundaries.
+
+```js
+<Suspense fallback={<Spinner />}>
+  <UserData />
+</Suspense>
+```
+
+- Nested `<Suspense>` can define more granular streaming.
+- Streaming helps show content **incrementally**, improving perceived performance.
+
+## Summary
+
+| Approach          | Pros                                            | Cons                                                 |
+| ----------------- | ----------------------------------------------- | ---------------------------------------------------- |
+| Client Fetching   | Simpler to reason about, async control          | Worse LCP, depends on JS                             |
+| SSR               | Fast visible page, good SEO                     | Bigger payload, hydration needed                     |
+| Server Components | Smallest bundles, direct data access, best perf | Complex infra, limited support (only in Next.js now) |
+
+> ✅ Server Components tend to **outperform** both client fetching and classic SSR if used properly.
