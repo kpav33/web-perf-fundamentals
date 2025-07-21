@@ -982,3 +982,141 @@ export const dynamic = "force-dynamic";
 | Server Components | Smallest bundles, direct data access, best perf | Complex infra, limited support (only in Next.js now) |
 
 > ✅ Server Components tend to **outperform** both client fetching and classic SSR if used properly.
+
+---
+
+# Interaction Performance
+
+## Chrome DevTools for Interactions
+
+- When optimizing **initial load performance**, **production builds** are necessary:
+  - Dev builds don’t bundle, minify, or tree-shake correctly.
+  - This skews performance metrics and leads to misleading conclusions.
+- For **interaction performance**, the situation is reversed:
+  - Production builds are minified and hard to trace.
+  - Use **development mode** to debug, so function names remain readable.
+  - Production builds are only useful to **detect bottlenecks**, not debug them.
+
+### Understanding the React "Blob"
+
+- During initial load, React can be treated as a single "blob"—size matters most.
+- For interaction performance, you must **dig into what React is doing** internally:
+  - Which components are rendering?
+  - What JavaScript is being executed?
+  - Where is time being spent?
+
+### Profiling Setup
+
+- Throttle the CPU to **simulate low-end mobile** conditions:
+  - Use **20x CPU throttling** to surface potential performance issues.
+- Open the **Performance Panel** in Chrome DevTools:
+  - Press Record → Perform the interaction → Stop recording.
+  - The **Main** and **Interactions** tracks will become your primary tools.
+
+### Reading the Performance Panel
+
+- **Main Thread** shows JavaScript execution timeline.
+  - Tasks covered in **red** are **Long Tasks**—they block the browser.
+- **Interactions Panel** shows:
+  - Each user interaction (e.g., keypress, click).
+  - How long each interaction took to trigger the next paint.
+- In dev mode, function names are visible and traceable.
+  - Helps differentiate between:
+    - **Non-React code** causing long tasks (e.g., utility functions).
+    - **React component re-renders** due to state updates.
+
+## The Long Tasks Problem
+
+### What Is a Long Task?
+
+- The browser treats all JavaScript as discrete **tasks**.
+- While a task is running, the browser is **completely unresponsive**.
+- Long tasks can come from:
+  - Initial synchronous JS execution.
+  - Async operations like callbacks.
+- A "long" task is typically any task >50 ms.
+
+### Diagnosing the Source
+
+- If a **named function** shows up in the flame graph:
+  - It’s likely **user-defined code** (non-React).
+- If the function name is a **React component**, the cause is likely:
+  - **Too many renders** or excessive React reactivity.
+
+## Fixing Long Tasks
+
+### 1. **Split or Shorten Tasks**
+
+- Breaking up a large task into smaller chunks improves responsiveness.
+- This allows the browser to **yield** and handle user input between chunks.
+
+### 2. **Yield to Main Thread**
+
+- Splitting tasks is often called **"yielding to main"**.
+- When chaining multiple operations, yield between them to unblock UI rendering.
+
+#### Using the Scheduler API
+
+```ts
+const sleep = (ms: number) => {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    // busy wait
+  }
+};
+
+for (let i = 0; i < 10; i++) {
+  sleep(10);
+  await scheduler.yield(); // explicitly yield to main thread
+}
+```
+
+- `scheduler.yield()` is modern and **not yet supported in all browsers**.
+
+#### Fallback with `setTimeout`
+
+```ts
+const yieldToMainThread = () => {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+};
+```
+
+- This mimics yielding behavior and works in all modern environments.
+
+> Note: In React apps, you rarely need this. Most expensive tasks are wrapped in React’s internal scheduler (e.g., via `useState`, `useEffect`).
+
+---
+
+## React DevTools for Interactions
+
+- Install **React DevTools** for two new tabs:
+  - **Profiler**
+  - **Components**
+- Only available in **development mode**.
+
+### Profiler Features
+
+- In **Settings**, enable:
+  - ✅ "Highlight updates when components render"
+- This highlights components **every time they re-render**—great for spotting unnecessary renders.
+- Profiler allows you to:
+  - Record performance traces (similar to Chrome DevTools).
+  - View a **component flame graph** showing render hierarchy and timing.
+
+> The Profiler’s flame graph is typically **more readable** than Chrome's for React-specific performance.
+
+---
+
+## Summary
+
+- Debug **interaction performance in dev mode**, not production.
+- Use **CPU throttling** and the **Performance Panel** to spot long tasks.
+- Identify if long tasks come from:
+  - Custom functions (non-React logic)
+  - React components (excessive re-renders)
+- Split tasks or **yield to main** to unblock the browser.
+- Use **React DevTools Profiler** to trace and fix unnecessary component renders.
+
+> Pro tip: Interaction bottlenecks are often caused by long tasks or excessive rendering—start by inspecting those red blocks in the Main thread.
