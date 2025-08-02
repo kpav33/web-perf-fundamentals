@@ -1087,8 +1087,6 @@ const yieldToMainThread = () => {
 
 > Note: In React apps, you rarely need this. Most expensive tasks are wrapped in React’s internal scheduler (e.g., via `useState`, `useEffect`).
 
----
-
 ## React DevTools for Interactions
 
 - Install **React DevTools** for two new tabs:
@@ -1120,3 +1118,181 @@ const yieldToMainThread = () => {
 - Use **React DevTools Profiler** to trace and fix unnecessary component renders.
 
 > Pro tip: Interaction bottlenecks are often caused by long tasks or excessive rendering—start by inspecting those red blocks in the Main thread.
+
+---
+
+# Getting Rid of Unnecessary Re-renders
+
+## Re-renders Basics
+
+- A React app initially **mounts** on first render:
+  - Components are created.
+  - Lifecycle hooks run.
+  - DOM nodes are hydrated or created.
+- After mounting, any state change triggers **re-renders**, not remounts.
+- Re-renders are faster than mounts—React reuses existing DOM.
+- The **only** way to cause a re-render is to **update state**:
+  - This includes `useState`, `useReducer`, `useSyncExternalStore`, or any external state management library.
+- Once a component re-renders:
+  - All **child components** will re-render too, unless explicitly memoized.
+
+### How Props Affect Re-rendering
+
+- **Props alone do not cause re-renders**.
+  - The only time props matter is when they are **derived from updated state**.
+- For **memoized components**, React checks if **any prop changed**:
+  - If so, the component re-renders.
+  - If not, it skips rendering.
+
+> To skip re-renders reliably, memoize **both the component** and **all its props**.
+
+### Re-render Hierarchy and Component Positioning
+
+#### Component Tree Behavior
+
+- Re-renders flow **top-down**, never bottom-up.
+  - State updates cause children to re-render.
+  - Parent components are unaffected by child state.
+- Creating components **inside other components** is discouraged:
+  - This causes **remounting** on each re-render.
+  - Leads to performance issues and subtle bugs.
+
+#### When to Re-mount on Purpose
+
+- Use the `key` prop to **force remounts** or **preserve sibling state**.
+
+  - Provide a stable `key` to control lifecycle behavior intentionally.
+
+## Re-renders Situation in the Search Field
+
+- If a state update triggers many components to re-render:
+  - **Move the state "down"** to the smallest component that needs it.
+- Alternatively, use **debouncing** for controlled inputs to limit re-render frequency.
+
+### Passing Components via Props
+
+- If you **can’t move state down**, use this trick:
+  - Wrap state logic in a component.
+  - Pass that component as a **prop** (e.g., `content`) to isolate updates.
+
+```jsx
+const LayoutWithSearch = ({ content }) => {
+  const [search, setSearch] = useState("");
+  return (
+    <AppLayoutLazySidebar search={search} setSearch={setSearch}>
+      {content}
+      <div>Search results for {search}</div>
+    </AppLayoutLazySidebar>
+  );
+};
+
+export default function App() {
+  return <LayoutWithSearch content={<DashboardPage />} />;
+}
+```
+
+- You can simplify by renaming the prop to `children`:
+  - This allows JSX nesting and syntactic sugar.
+
+```jsx
+export default function App() {
+  return (
+    <LayoutWithSearch>
+      <DashboardPage />
+    </LayoutWithSearch>
+  );
+}
+```
+
+## Avoiding Props Drilling
+
+- To share state **without drilling** through props:
+  - Use **React Context**.
+  - Create a provider at the top level, and consume state wherever needed.
+
+> Context helps avoid unnecessary renders **only if** used with memoization correctly.
+
+## Memoization
+
+### Three React Memoization Tools
+
+- `useMemo`: Memoize objects/arrays.
+- `useCallback`: Memoize functions.
+- `memo`: Memoize components.
+
+```jsx
+const App = () => {
+  const dataMemo = useMemo(() => [{ id: 1 }, { id: 2 }], []);
+};
+
+const App = () => {
+  const onClickMemo = useCallback(() => {
+    console.log("Button clicked");
+  }, []);
+};
+
+const App = () => <div>...</div>;
+const AppMemo = memo(App);
+```
+
+### Memoizing Everything
+
+- Wrap all props passed to `memo`ized components:
+  - Arrays → `useMemo`
+  - Functions → `useCallback`
+  - Components → `memo`
+- Forgetting to memoize **even one prop** breaks memoization.
+
+```jsx
+// wrapped in memo to prevent re-renders
+const DashboardPageMemo = memo(DashboardPage);
+export default function App() {
+  // state here
+  // wrap objects and arrays in useMemo
+  const dataMemo = useMemo(() => [{ id: 1 }, { id: 2 }], []);
+  // wrap functions in useCallback
+  const onClickMemo = useCallback(() => {
+    console.log("Button clicked");
+  }, []);
+
+  return (
+    <AppLayoutLazySidebar search={search} setSearch={setSearch}>
+      {/* don't forget to memoize ALL the props! */}
+      <DashboardPageMemo data={dataMemo} onClickMemo={onClickMemo} />
+      <div>Search results for {search}</div>
+    </AppLayoutLazySidebar>
+  );
+}
+```
+
+### Memoizing Children Properly
+
+- When passing components via `children`, memoizing the parent isn't enough.
+- Children in JSX are **React elements**, not components:
+  - Memoizing them requires `useMemo`, not `memo`.
+
+```jsx
+export default function App() {
+  // state here
+  const memoChild = useMemo(() => {
+    return <ChildComponentMemo />;
+  }, []);
+  return (
+    <AppLayoutLazySidebar search={search} setSearch={setSearch}>
+      <DashboardPageMemo>{memoChild}</DashboardPageMemo>
+    </AppLayoutLazySidebar>
+  );
+}
+```
+
+## Summary
+
+- State updates always trigger re-renders—optimize where that state lives.
+- Avoid remounting by not defining components inline.
+- Memoization works only when **everything passed** is memoized.
+- Use context to avoid props drilling, but memoize context consumers too.
+- Debounce input and isolate re-renders to keep interactions responsive.
+
+> Pro tip: The best optimization is not rendering at all—structure state and components so that updates affect the smallest possible subtree.
+
+---
