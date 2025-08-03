@@ -1296,3 +1296,56 @@ export default function App() {
 > Pro tip: The best optimization is not rendering at all—structure state and components so that updates affect the smallest possible subtree.
 
 ---
+
+# React Compiler
+
+## What Is React Compiler
+
+- React Compiler is **not part of the React library**—it’s a separate tool implemented as a **Babel plugin**.
+- It runs during the build step and transforms your React code into a more optimized form.
+- It’s **not yet considered production-ready** for all use cases.
+
+## What the Compiler Does
+
+- Like any Babel plugin, it **rewrites code** before it reaches the browser.
+- The primary goal is to **automatically apply memoization**:
+  - It doesn't wrap components in `memo`, `useMemo`, or `useCallback`.
+  - Instead, it transforms the code to behave as if it were memoized.
+- Think of the compiler as an **auto-memoization layer** that tries to reduce unnecessary re-renders.
+
+## The Performance Impact of the Compiler
+
+- Interaction performance often **improves significantly** with the compiler:
+  - Reduces unnecessary re-renders → better INP (Interaction to Next Paint).
+- But it introduces trade-offs:
+  - Bundle size can increase.
+  - Initial load performance (e.g., LCP) may worsen due to more JavaScript.
+  - The "main" thread may have **larger initial tasks** from heavier compiled code.
+- When React Compiler is active, components will show a **"Memo" label** in React DevTools.
+- This helps identify components that were optimized by the compiler.
+
+## Not Everything Can Be Caught by the Compiler
+
+- **Not all code can be optimized**:
+  - If the code is too complex or written in unusual patterns, the compiler may bail out.
+  - Bugs or anti-patterns in your code can still trigger unnecessary re-renders.
+- External libraries are **not transformed** unless they are compiled with React Compiler themselves.
+- So performance gains may be **limited by dependencies** you don’t control.
+
+## Is It Worth It?
+
+- React Compiler can offer **substantial interaction performance gains**, especially in large apps.
+- However:
+  - It doesn’t catch _every_ re-render.
+  - It adds a layer of abstraction—**harder to reason about render behavior** just by reading the source code.
+  - **Debugging becomes more complex** due to auto-transformed logic.
+
+## Summary
+
+- React Compiler automates memoization and reduces interaction-triggered re-renders.
+- Helps improve **INP**, but may slightly degrade **LCP** due to more compiled JS.
+- Not all code is optimizable—complex or third-party code can limit effectiveness.
+- Makes render behavior less obvious—be cautious when debugging.
+- Best results come from **clean, predictable component structure**.
+
+> Pro tip: Use the compiler when you're optimizing for interactivity at scale, but keep profiling tools close—automation doesn't mean infallibility.
